@@ -79,34 +79,64 @@ jobs:
       with:
         path: artifacts
 
+    - name: Set release metadata
+      run: |
+        if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+          echo "RELEASE_TAG=nightly" >> $GITHUB_ENV
+          echo "RELEASE_NAME=Nightly (main)" >> $GITHUB_ENV
+          echo "RELEASE_DRAFT=true" >> $GITHUB_ENV
+          echo "RELEASE_PRERELEASE=true" >> $GITHUB_ENV
+          echo "RELEASE_HEADER=## Development Release" >> $GITHUB_ENV
+          echo "RELEASE_SUBHEADER=Built from latest main branch commit." >> $GITHUB_ENV
+        else
+          echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          echo "RELEASE_NAME=Release ${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          echo "RELEASE_DRAFT=false" >> $GITHUB_ENV
+          echo "RELEASE_PRERELEASE=false" >> $GITHUB_ENV
+          echo "RELEASE_HEADER=## Release ${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          echo "RELEASE_SUBHEADER=" >> $GITHUB_ENV
+        fi
+
+    - name: Prepare artifacts
+      run: |
+        mkdir -p dist
+        for dir in artifacts/*; do
+          if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            file="$dir/clipboard"
+            if [ -f "$file" ]; then
+              target="dist/clipboard-${name}"
+              cp "$file" "$target"
+              chmod +x "$target"
+            fi
+          fi
+        done
+
     - name: Generate release body
       run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-          echo "## Development Release" > body.md
-          echo "Built from latest main branch commit." >> body.md
-        else
-          echo "## Release ${{ github.ref_name }}" > body.md
+        echo "${RELEASE_HEADER}" > body.md
+        if [ -n "${RELEASE_SUBHEADER}" ]; then
+          echo "${RELEASE_SUBHEADER}" >> body.md
         fi
         echo "" >> body.md
         echo "Built executables for various Linux distributions:" >> body.md
-        for dir in artifacts/*; do
-          if [ -d "$dir" ]; then
-            file="$dir/clipboard"
-            if [ -f "$file" ]; then
-              name=$(basename "$dir")
-              arch=$(echo $name | cut -d'-' -f3)
-              distro=$(echo $name | cut -d'-' -f2)
-              echo "- $name: Executable for $distro $arch" >> body.md
-            fi
-          fi
+        shopt -s nullglob
+        for file in dist/clipboard-*; do
+          base=$(basename "$file")
+          distro=$(echo "$base" | cut -d'-' -f2)
+          arch=$(echo "$base" | cut -d'-' -f3)
+          echo "- ${base}: Executable for ${distro} ${arch}" >> body.md
         done
 
     - name: Create release
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/**/clipboard
+        files: dist/*
         body_path: body.md
-        draft: ${{ github.ref == 'refs/heads/main' }}
-        prerelease: ${{ github.ref == 'refs/heads/main' }}
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: ${{ env.RELEASE_NAME }}
+  draft: ${{ env.RELEASE_DRAFT == 'true' }}
+  prerelease: ${{ env.RELEASE_PRERELEASE == 'true' }}
+        replace_assets: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
