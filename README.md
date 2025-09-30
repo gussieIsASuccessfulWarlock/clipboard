@@ -38,6 +38,25 @@ To install the program to `/usr/local/bin/`:
 make install
 ```
 
+## Releases
+
+Pre-built executables are available in the [GitHub Releases](https://github.com/gussieIsASuccessfulWarlock/clipboard/releases) for various Linux distributions and architectures. These are automatically built and released for:
+
+- Ubuntu (x86_64, ARM64)
+- Debian (x86_64)
+- Fedora (x86_64)
+- CentOS (x86_64)
+- Alpine (x86_64)
+
+Download the appropriate binary for your system, make it executable, and place it in your PATH:
+
+```bash
+chmod +x clipboard-ubuntu-x86_64  # Replace with the actual file name
+sudo mv clipboard-ubuntu-x86_64 /usr/local/bin/clipboard
+```
+
+This provides an easy installation method without needing to build from source.
+
 ## Usage
 
 Pipe any command output to the clipboard:

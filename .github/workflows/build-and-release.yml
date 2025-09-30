@@ -1,0 +1,102 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            distro: ubuntu
+            container: ubuntu:22.04
+            install: apt-get update && apt-get install -y libgtk-3-dev pkg-config g++ make
+          - os: ubuntu-latest
+            arch: x86_64
+            distro: debian
+            container: debian:latest
+            install: apt-get update && apt-get install -y libgtk-3-dev pkg-config g++ make
+          - os: ubuntu-latest
+            arch: x86_64
+            distro: fedora
+            container: fedora:latest
+            install: dnf install -y gtk3-devel pkgconfig gcc-c++ make
+          - os: ubuntu-latest
+            arch: x86_64
+            distro: centos
+            container: quay.io/centos/centos:stream9
+            install: dnf install -y gtk3-devel pkgconfig gcc-c++ make
+          - os: ubuntu-latest
+            arch: x86_64
+            distro: alpine
+            container: alpine:latest
+            install: apk add gtk+3.0-dev pkgconfig g++ make
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            distro: ubuntu
+            container: ubuntu:22.04
+            install: apt-get update && apt-get install -y libgtk-3-dev pkg-config g++ make
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: ${{ matrix.install }}
+
+    - name: Build
+      run: make
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: clipboard-${{ matrix.distro }}-${{ matrix.arch }}
+        path: clipboard
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Generate release body
+      run: |
+        echo "## Release ${{ github.ref_name }}" > body.md
+        echo "" >> body.md
+        echo "Built executables for various Linux distributions:" >> body.md
+        for dir in artifacts/*; do
+          if [ -d "$dir" ]; then
+            file="$dir/clipboard"
+            if [ -f "$file" ]; then
+              name=$(basename "$dir")
+              arch=$(echo $name | cut -d'-' -f3)
+              distro=$(echo $name | cut -d'-' -f2)
+              echo "- $name: Executable for $distro $arch" >> body.md
+            fi
+          fi
+        done
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/**/clipboard
+        body_path: body.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
